@@ -465,7 +465,7 @@ Content-Type: application/json
 }
 ```
 **Expected:** `500 Internal Server Error` - Invalid product ID format
-![alt text](image-21.png)
+![alt text](public/image/image-21.png)
 **5. Create Order with Non-existent Product ID**
 ```http
 POST /products/api/products/buy
@@ -477,7 +477,7 @@ Content-Type: application/json
 }
 ```
 **Expected:** `500 Internal Server Error` - Product not found
-![alt text](image-22.png)
+![alt text](public/image/image-22.png)
 ### Using Postman
 
 1. Import the provided Postman collection
