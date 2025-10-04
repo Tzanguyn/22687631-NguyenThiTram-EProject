@@ -79,7 +79,8 @@ dist
 
 # Gatsby files
 .cache/
-public
+# public - commented out to allow public/image/ for README screenshots
+# public
 
 # Storybook build outputs
 .out
