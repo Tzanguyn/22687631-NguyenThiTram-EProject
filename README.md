@@ -54,32 +54,7 @@ cd order && npm install && cd ..
 # API Gateway
 cd api-gateway && npm install && cd ..
 ```
-
-### 3. Configure environment variables
-Create `.env` files in each service directory:
-
-**auth/.env:**
-```env
-MONGODB_AUTH_URI=mongodb://localhost:27017/auth
-JWT_SECRET=your_jwt_secret_key_here
-```
-
-**product/.env:**
-```env
-MONGODB_AUTH_URI=mongodb://localhost:27017/auth
-JWT_SECRET=your_jwt_secret_key_here
-MONGODB_PRODUCT_URI=mongodb://localhost:27017/products
-```
-
-**order/.env:**
-```env
-MONGODB_AUTH_URI=mongodb://localhost:27017/auth
-JWT_SECRET=your_jwt_secret_key_here
-MONGODB_PRODUCT_URI=mongodb://localhost:27017/products
-MONGODB_ORDER_URI=mongodb://localhost:27017/orders
-```
-
-### 4. Start external services
+### 3. Start external services
 ```bash
 # Start MongoDB
 mongod
@@ -88,7 +63,7 @@ mongod
 rabbitmq-server
 ```
 
-### 5. Start all microservices
+### 4. Start all microservices
 Open 4 separate terminals and run:
 
 ```bash
