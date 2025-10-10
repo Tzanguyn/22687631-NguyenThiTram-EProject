@@ -11,7 +11,7 @@ class App {
     this.connectDB();
     this.setMiddlewares();
     this.setRoutes();
-    this.setupMessageBroker();
+    // setupMessageBroker is async; don't await in constructor. Call it from start().
   }
 
   async connectDB() {
@@ -37,13 +37,28 @@ class App {
   }
 
   setupMessageBroker() {
-    MessageBroker.connect();
+    // connect and register consumers
+    return MessageBroker.connect();
   }
 
   start() {
-    this.server = this.app.listen(3001, () =>
-      console.log("Server started on port 3001")
-    );
+    // Ensure message broker is connected and consumers are registered before starting
+    (async () => {
+      try {
+        await this.setupMessageBroker();
+
+        // Register consumer for product messages and pass controller handler
+        const ProductController = require("./controllers/productController");
+        const productController = new ProductController();
+        MessageBroker.consumeMessage("products", productController.handleProductMessage);
+
+        this.server = this.app.listen(3001, () =>
+          console.log("Server started on port 3001")
+        );
+      } catch (err) {
+        console.error('Failed to start server due to MessageBroker error:', err.message);
+      }
+    })();
   }
 
   async stop() {

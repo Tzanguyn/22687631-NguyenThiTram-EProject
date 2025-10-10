@@ -1,32 +1,62 @@
 const amqp = require("amqplib");
-const config = require("../config");
 const OrderService = require("../services/orderService");
 
 class MessageBroker {
-  static async connect() {
+  constructor() {
+    this.connection = null;
+    this.channel = null;
+  }
+
+  async connect() {
     try {
-      const connection = await amqp.connect(config.rabbitMQUrl);
-      const channel = await connection.createChannel();
-
-      // Declare the order queue
-      await channel.assertQueue(config.rabbitMQQueue, { durable: true });
-
-      // Consume messages from the order queue on buy
-      channel.consume(config.rabbitMQQueue, async (message) => {
-        try {
-          const order = JSON.parse(message.content.toString());
-          const orderService = new OrderService();
-          await orderService.createOrder(order);
-          channel.ack(message);
-        } catch (error) {
-          console.error(error);
-          channel.reject(message, false);
-        }
+      console.log("Connecting to RabbitMQ...");
+      this.connection = await amqp.connect({
+        protocol: "amqp",
+        hostname: "localhost",
+        port: 5672,
+        username: "admin123",
+        password: "123456",
+        frameMax: 131072,
+        channelMax: 0,
+        heartbeat: 30,
       });
-    } catch (error) {
-      console.error(error);
+
+      this.connection.on("error", (err) => console.error("❌ RabbitMQ error:", err.message));
+      this.connection.on("close", () => console.warn("⚠️ RabbitMQ connection closed."));
+
+      this.channel = await this.connection.createChannel();
+      await this.channel.assertQueue("orders", { durable: true });
+
+      console.log("✅ RabbitMQ connected successfully!");
+      this.consumeOrders();
+    } catch (err) {
+      console.error("❌ Failed to connect to RabbitMQ:", err.message);
+      console.log("📝 Order service will continue without message queue");
     }
+  }
+
+  async consumeOrders() {
+    if (!this.channel) return console.log("⚠️ No channel - skipping consumer");
+
+    await this.channel.consume("orders", async (msg) => {
+      if (!msg) return;
+      try {
+        const orderData = JSON.parse(msg.content.toString());
+        console.log("📥 Received order:", orderData);
+
+        const orderService = new OrderService();
+        await orderService.createOrder(orderData);
+
+        this.channel.ack(msg);
+        console.log("✅ Order processed successfully");
+      } catch (err) {
+        console.error("❌ Error processing order:", err.message);
+        this.channel.reject(msg, false);
+      }
+    });
+
+    console.log("👂 Listening to queue 'orders'");
   }
 }
 
-module.exports = MessageBroker;
+module.exports = new MessageBroker();

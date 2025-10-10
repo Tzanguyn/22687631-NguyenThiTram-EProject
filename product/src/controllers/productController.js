@@ -12,6 +12,9 @@ class ProductController {
     this.getOrderStatus = this.getOrderStatus.bind(this);
     this.ordersMap = new Map();
 
+    // Bind handler so it can be used as a consumer callback
+    this.handleProductMessage = this.handleProductMessage.bind(this);
+
   }
 
   async createProduct(req, res, next) {
@@ -44,7 +47,19 @@ class ProductController {
       }
   
       const { ids } = req.body;
-      const products = await Product.find({ _id: { $in: ids } });
+
+      // Validate ids to avoid CastError
+      const mongoose = require('mongoose');
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: 'ids must be a non-empty array' });
+      }
+
+      const validIds = ids.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (validIds.length === 0) {
+        return res.status(400).json({ message: 'No valid product ids provided' });
+      }
+
+      const products = await Product.find({ _id: { $in: validIds } });
   
       const orderId = uuid.v4(); // Generate a unique order ID
       this.ordersMap.set(orderId, { 
@@ -63,10 +78,10 @@ class ProductController {
       // If RabbitMQ is not available, simulate order processing
       if (!publishSuccess) {
         console.log("RabbitMQ not available, simulating order processing...");
-        
+
         // Calculate total price
         const totalPrice = products.reduce((sum, product) => sum + product.price, 0);
-        
+
         // Simulate order completion
         const completedOrder = {
           orderId,
@@ -77,21 +92,10 @@ class ProductController {
           createdAt: new Date(),
           message: "Order processed without RabbitMQ (simulation mode)"
         };
-        
+
         this.ordersMap.set(orderId, completedOrder);
         return res.status(201).json(completedOrder);
       }
-
-      messageBroker.consumeMessage("products", (data) => {
-        const orderData = JSON.parse(JSON.stringify(data));
-        const { orderId } = orderData;
-        const order = this.ordersMap.get(orderId);
-        if (order) {
-          // update the order in the map
-          this.ordersMap.set(orderId, { ...order, ...orderData, status: 'completed' });
-          console.log("Updated order:", order);
-        }
-      });
   
       // Long polling until order is completed (with timeout)
       let order = this.ordersMap.get(orderId);
@@ -109,6 +113,23 @@ class ProductController {
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Server error" });
+    }
+  }
+
+  // Handler for messages coming from 'products' queue (called by app on startup)
+  handleProductMessage(data) {
+    try {
+      const orderData = JSON.parse(JSON.stringify(data));
+      const { orderId } = orderData;
+      const order = this.ordersMap.get(orderId);
+      if (order) {
+        this.ordersMap.set(orderId, { ...order, ...orderData, status: 'completed' });
+        console.log('Updated order from product message:', orderId);
+      } else {
+        console.warn('Received product message for unknown orderId:', orderId);
+      }
+    } catch (err) {
+      console.error('Error handling product message:', err.message);
     }
   }
   

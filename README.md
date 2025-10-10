@@ -159,9 +159,13 @@ Content-Type: application/json
   "ids": ["<PRODUCT_ID_1>", "<PRODUCT_ID_2>"]
 }
 ```
-![alt text](public/image/image-5.png)
+![alt text](public/image/image-25.png)
 
-![alt text](public/image/image-6.png)
+![alt text](public/image/image-26.png)
+
+![alt text](public/image/image-27.png)
+
+![alt text](public/image/image-28.png)
 ## 🧪 Testing
 
 ### Test Cases Overview
@@ -426,8 +430,8 @@ Content-Type: application/json
   "ids": []
 }
 ```
-**Expected:** `500 Internal Server Error` - Product IDs required
-![alt text](public/image/image-20.png)
+**Expected:** `400 Bad Request` - Product IDs required
+![alt text](public/image/image-29.png)
 
 **4. Create Order with Invalid Product ID Format**
 ```http
@@ -439,8 +443,8 @@ Content-Type: application/json
   "ids": ["invalid_id_format"]
 }
 ```
-**Expected:** `500 Internal Server Error` - Invalid product ID format
-![alt text](public/image/image-21.png)
+**Expected:** `400 Bad Request` - Invalid product ID format
+![alt text](public/image/image-30.png)
 **5. Create Order with Non-existent Product ID**
 ```http
 POST /products/api/products/buy
@@ -451,8 +455,8 @@ Content-Type: application/json
   "ids": ["64f1a2b3c4d5e6f7g8h9i999"]
 }
 ```
-**Expected:** `500 Internal Server Error` - Product not found
-![alt text](public/image/image-22.png)
+**Expected:** `400 Bad Request` - Product not found
+![alt text](public/image/image-31.png)
 ### Using Postman
 
 1. Import the provided Postman collection
