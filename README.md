@@ -2,15 +2,6 @@
 
 A complete microservices-based e-commerce application built with Node.js, Express, MongoDB, and RabbitMQ.
 
-## 🏗️ Architecture
-
-This project implements a microservices architecture with the following services:
-
-- **API Gateway** (Port 3003) - Request routing and load balancing
-- **Auth Service** (Port 3000) - User authentication and JWT management
-- **Product Service** (Port 3001) - Product catalog management
-- **Order Service** (Port 3002) - Order processing via message queues
-
 ## 🛠️ Tech Stack
 
 - **Backend:** Node.js, Express.js
