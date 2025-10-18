@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ep_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin123
+      RABBITMQ_DEFAULT_PASS: 123456
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:6.0
+    container_name: ep_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  auth:
+    build: ./auth
+    container_name: ep_auth
+    environment:
+      - MONGODB_AUTH_URI=mongodb://mongo:27017/auth
+      - JWT_SECRET=dev_jwt_secret
+      - RABBITMQ_URI=amqp://admin123:123456@rabbitmq:5672
+    depends_on:
+      - mongo
+      - rabbitmq
+    # Port 3000 is kept internal; API Gateway will route external traffic
+
+  product:
+    build: ./product
+    container_name: ep_product
+    environment:
+      - MONGODB_PRODUCT_URI=mongodb://mongo:27017/products
+      - RABBITMQ_URI=amqp://admin123:123456@rabbitmq:5672
+      - JWT_SECRET=dev_jwt_secret
+    depends_on:
+      - mongo
+      - rabbitmq
+    volumes:
+      - ./wait-for-it.sh:/wait-for-it.sh:ro
+    command: ["/wait-for-it.sh","rabbitmq","5672","node","index.js"]
+    # Port 3001 is internal only; access via API Gateway
+
+  order:
+    build: ./order
+    container_name: ep_order
+    environment:
+      - MONGODB_ORDER_URI=mongodb://mongo:27017/orders
+      - RABBITMQ_URI=amqp://admin123:123456@rabbitmq:5672
+    depends_on:
+      - mongo
+      - rabbitmq
+    volumes:
+      - ./wait-for-it.sh:/wait-for-it.sh:ro
+    command: ["/wait-for-it.sh","rabbitmq","5672","node","index.js"]
+    # Port 3002 is internal only; access via API Gateway
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: ep_api_gateway
+    environment:
+      - JWT_SECRET=dev_jwt_secret
+    depends_on:
+      - auth
+      - product
+      - order
+    ports:
+      - "3003:3003"
+
+volumes:
+  rabbitmq_data:
+    driver: local
+  mongo_data:
+    driver: local
