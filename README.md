@@ -54,9 +54,6 @@ mongod
 rabbitmq-server
 ```
 
-<<<<<<< HEAD
-If you prefer to run RabbitMQ with Docker (recommended for local testing), a docker-compose file is included.
-
 ### Run RabbitMQ with Docker
 
 The repository contains a `docker-compose.yml` that starts a RabbitMQ container with the management UI and a default user (admin123 / 123456).
@@ -86,28 +83,6 @@ node product/index.js
 ```
 
 ### 5. Start all microservices
-=======
-### 4. Start all microservices
->>>>>>> 367dd25cfa68b89671c9be865bf312c8eb4140b8
-Open 4 separate terminals and run:
-
-```bash
-# Terminal 1 - Auth Service
-cd auth
-node index.js
-
-# Terminal 2 - Product Service
-cd product
-node index.js
-
-# Terminal 3 - Order Service
-cd order
-node index.js
-
-# Terminal 4 - API Gateway
-cd api-gateway
-node index.js
-```
 
 ## 📚 API Documentation
 
