@@ -27,6 +27,7 @@ class App {
   async setupOrderConsumer() {
     try {
       console.log("Connecting to RabbitMQ...");
+<<<<<<< HEAD
       const uri = process.env.RABBITMQ_URI || null;
       let connection;
       if (uri) {
@@ -38,6 +39,9 @@ class App {
         const pass = process.env.RABBITMQ_PASS || '123456';
         connection = await amqp.connect(`amqp://${user}:${pass}@${host}:${port}`);
       }
+=======
+      const connection = await amqp.connect("amqp://admin123:123456@127.0.0.1:5672");
+>>>>>>> 367dd25cfa68b89671c9be865bf312c8eb4140b8
       console.log("✅ Connected to RabbitMQ");
       
       const channel = await connection.createChannel();

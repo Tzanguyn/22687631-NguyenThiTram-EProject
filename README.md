@@ -2,15 +2,6 @@
 
 A complete microservices-based e-commerce application built with Node.js, Express, MongoDB, and RabbitMQ.
 
-## 🏗️ Architecture
-
-This project implements a microservices architecture with the following services:
-
-- **API Gateway** (Port 3003) - Request routing and load balancing
-- **Auth Service** (Port 3000) - User authentication and JWT management
-- **Product Service** (Port 3001) - Product catalog management
-- **Order Service** (Port 3002) - Order processing via message queues
-
 ## 🛠️ Tech Stack
 
 - **Backend:** Node.js, Express.js
@@ -54,32 +45,7 @@ cd order && npm install && cd ..
 # API Gateway
 cd api-gateway && npm install && cd ..
 ```
-
-### 3. Configure environment variables
-Create `.env` files in each service directory:
-
-**auth/.env:**
-```env
-MONGODB_AUTH_URI=mongodb://localhost:27017/auth
-JWT_SECRET=your_jwt_secret_key_here
-```
-
-**product/.env:**
-```env
-MONGODB_AUTH_URI=mongodb://localhost:27017/auth
-JWT_SECRET=your_jwt_secret_key_here
-MONGODB_PRODUCT_URI=mongodb://localhost:27017/products
-```
-
-**order/.env:**
-```env
-MONGODB_AUTH_URI=mongodb://localhost:27017/auth
-JWT_SECRET=your_jwt_secret_key_here
-MONGODB_PRODUCT_URI=mongodb://localhost:27017/products
-MONGODB_ORDER_URI=mongodb://localhost:27017/orders
-```
-
-### 4. Start external services
+### 3. Start external services
 ```bash
 # Start MongoDB
 mongod
@@ -88,6 +54,7 @@ mongod
 rabbitmq-server
 ```
 
+<<<<<<< HEAD
 If you prefer to run RabbitMQ with Docker (recommended for local testing), a docker-compose file is included.
 
 ### Run RabbitMQ with Docker
@@ -119,6 +86,9 @@ node product/index.js
 ```
 
 ### 5. Start all microservices
+=======
+### 4. Start all microservices
+>>>>>>> 367dd25cfa68b89671c9be865bf312c8eb4140b8
 Open 4 separate terminals and run:
 
 ```bash
@@ -215,12 +185,24 @@ Content-Type: application/json
 }
 ```
 ![alt text](public/image/image-25.png)
+<<<<<<< HEAD
 
 ![alt text](public/image/image-26.png)
 
 ![alt text](public/image/image-27.png)
 
 ![alt text](public/image/image-28.png)
+=======
+
+![alt text](public/image/image-26.png)
+
+![alt text](public/image/image-27.png)
+
+![alt text](public/image/image-28.png)
+
+<img width="1920" height="1200" alt="Screenshot 2025-10-10 124917" src="https://github.com/user-attachments/assets/b957e99d-cd36-4879-a809-44f39fb5a46d" />
+
+>>>>>>> 367dd25cfa68b89671c9be865bf312c8eb4140b8
 ## 🧪 Testing
 
 ### Test Cases Overview
