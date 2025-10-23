@@ -9,6 +9,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      MONGODB_AUTH_URI: mongodb://localhost:27017/authdb
+      JWT_SECRET: test_secret
+      PORT: 3000
     
     services:
       mongodb:
@@ -51,6 +55,16 @@ jobs:
     - name: Install dependencies
       working-directory: ./${{ matrix.service }}
       run: npm install --no-audit --no-fund
+
+    - name: Wait for Mongo to be ready
+      run: |
+        echo "Waiting for MongoDB to accept connections on localhost:27017..."
+        for i in $(seq 1 60); do
+          (echo > /dev/tcp/localhost/27017) >/dev/null 2>&1 && echo "Mongo is up" && exit 0
+          echo "Mongo not ready yet ($i/60)..."
+          sleep 1
+        done
+        echo "Mongo did not start in time" && exit 1
 
     - name: Run tests
       working-directory: ./${{ matrix.service }}
