@@ -1,0 +1,78 @@
+name: CI/CD EProject Microservices
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- B1. Checkout repository ---
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # --- B2. Set up Node.js ---
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      # --- B3. Create .env files ---
+      - name: Create .env files
+        run: |
+          mkdir -p auth product
+
+          # Auth service
+          echo "MONGODB_AUTH_URI=mongodb://localhost:27017/auth_db" > auth/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
+          echo "LOGIN_TEST_USER=${{ secrets.LOGIN_TEST_USER }}" >> auth/.env
+          echo "LOGIN_TEST_PASSWORD=${{ secrets.LOGIN_TEST_PASSWORD }}" >> auth/.env
+          echo "PORT=3000" >> auth/.env
+
+          # Product service
+          echo "MONGODB_PRODUCT_URI=mongodb://localhost:27017/product_db" > product/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> product/.env
+          echo "AUTH_SERVICE_URL=http://localhost:3000" >> product/.env
+          echo "PORT=4000" >> product/.env
+
+      # --- B4. Install dependencies ---
+      - name: Install dependencies
+        run: |
+          cd auth && npm install && cd ..
+          cd product && npm install && cd ..
+
+      # --- B5. Start MongoDB ---
+      - name: Start MongoDB
+        run: |
+          docker run -d -p 27017:27017 --name mongo mongo:6
+          sleep 10
+
+      # --- B6. Run Auth tests ---
+      - name: Start Auth server and run tests
+        run: |
+          cd auth
+          npm start &        # chạy server Auth background
+          sleep 10           # chờ server khởi động
+          npm test           # chạy test Auth
+          pkill -f "node"    # tắt server Auth sau khi test
+
+      # --- B7. Run Product tests ---
+      - name: Run Product tests
+        run: |
+          cd auth
+          npm start &        # chạy Auth server để Product test
+          sleep 10
+          cd ../product
+          npm test
+          pkill -f "node"    # tắt server Auth sau khi test
+
+      # --- B8. Cleanup MongoDB ---
+      - name: Cleanup MongoDB
+        if: always()
+        run: |
+          docker stop mongo || true
+          docker rm mongo || true
