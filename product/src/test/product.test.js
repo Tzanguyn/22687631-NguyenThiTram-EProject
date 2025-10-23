@@ -7,12 +7,12 @@ const config = require("../config");
 
 chai.use(chaiHttp);
 // Chờ auth service sẵn sàng
-async function waitForAuth(retries = 10, delay = 3000) {
+const AUTH_URL = process.env.AUTH_URL || config.authServiceUrl || "http://auth:3000";
+async function waitForAuth(retries = 20, delay = 3000) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await chai
-        //.request(config.authServiceUrl || "http://localhost:3000")
-        .request(config.authServiceUrl || "http://auth:3000")
+        .request(AUTH_URL)
         .post("/login")
         .send({
           username: config.testUser.username,
@@ -24,6 +24,25 @@ async function waitForAuth(retries = 10, delay = 3000) {
       await new Promise((r) => setTimeout(r, delay));
     }
   }
+
+  // If AUTH_URL targets localhost, attempt to start auth app in-process as a fallback
+  if (AUTH_URL.includes("localhost") || AUTH_URL.includes("127.0.0.1")) {
+    try {
+      console.log("Attempting to start local auth server as fallback...");
+      const authApp = require('../../../auth/index');
+      // give auth a moment to start
+      await new Promise((r) => setTimeout(r, 2000));
+      // try one more time
+      const res = await chai
+        .request(AUTH_URL)
+        .post("/login")
+        .send({ username: config.testUser.username, password: config.testUser.password });
+      return res.body.token;
+    } catch (err) {
+      console.log("Local auth fallback failed:", err.message || err);
+    }
+  }
+
   throw new Error("Auth service is not available after retries");
 }
 
