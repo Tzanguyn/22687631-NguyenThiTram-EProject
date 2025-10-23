@@ -1,0 +1,105 @@
+name: CI/CD EProject Microservices
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci_cd:
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- B1. Lấy code ---
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # --- B2. Tạo file .env ---
+      - name: Create .env files
+        run: |
+          mkdir -p auth product order gateway
+
+          # Auth service
+          echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_AUTH_URI }}" > auth/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
+          echo "PORT=3000" >> auth/.env
+
+          # Product service
+          echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_PRODUCT_URI }}" > product/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> product/.env
+          echo "AUTH_SERVICE_URL=http://auth:3000" >> product/.env
+          echo "PORT=3001" >> product/.env
+
+          # Order service
+          echo "MONGODB_ORDER_URI=${{ secrets.MONGODB_ORDER_URI }}" > order/.env
+          echo "PORT=3002" >> order/.env
+
+          # Gateway
+          echo "PORT=3003" > gateway/.env
+
+      # --- B3. Build Docker images ---
+      - name: Build Docker images
+        run: |
+          docker build -t eproject-auth ./auth
+          docker build -t eproject-product ./product
+          docker build -t eproject-order ./order
+          docker build -t eproject-gateway ./api-gateway
+          docker pull mongo:6
+          docker pull rabbitmq:3-management
+
+      # --- B4. Tạo network ---
+      - name: Create Docker network
+        run: docker network create eproject-net || true
+
+      # --- B5. Chạy MongoDB & RabbitMQ ---
+      - name: Start MongoDB & RabbitMQ
+        run: |
+          docker run -d --name mongo --network eproject-net mongo:6
+          docker run -d --name rabbitmq --network eproject-net rabbitmq:3-management
+
+      # --- B6. Chạy Auth và Product ---
+      - name: Start Auth and Product
+        run: |
+          docker run -d --name auth --network eproject-net --env-file ./auth/.env eproject-auth
+          docker run -d --name product --network eproject-net --env-file ./product/.env eproject-product
+          sleep 15
+
+      # --- B7. Run tests inside containers ---
+      - name: Run Auth tests
+        run: docker exec auth npm test
+
+      - name: Run Product tests
+        run: docker exec product npm test
+
+      # --- B8. Đăng nhập Docker Hub ---
+      - name: Login to Docker Hub
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+      # --- B9. Push toàn bộ image lên Docker Hub ---
+      - name: Push all images
+        run: |
+          USER=${{ secrets.DOCKER_USERNAME }}
+          PROJECT=eproject
+
+          docker tag eproject-auth $USER/$PROJECT-auth:latest
+          docker tag eproject-product $USER/$PROJECT-product:latest
+          docker tag eproject-order $USER/$PROJECT-order:latest
+          docker tag eproject-gateway $USER/$PROJECT-gateway:latest
+          docker tag mongo:6 $USER/$PROJECT-mongo:latest
+          docker tag rabbitmq:3-management $USER/$PROJECT-rabbitmq:latest
+
+          docker push $USER/$PROJECT-auth:latest
+          docker push $USER/$PROJECT-product:latest
+          docker push $USER/$PROJECT-order:latest
+          docker push $USER/$PROJECT-gateway:latest
+          docker push $USER/$PROJECT-mongo:latest
+          docker push $USER/$PROJECT-rabbitmq:latest
+
+      # --- B10. Dọn dẹp ---
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop auth product order gateway mongo rabbitmq || true
+          docker rm auth product order gateway mongo rabbitmq || true
+          docker network rm eproject-net || true

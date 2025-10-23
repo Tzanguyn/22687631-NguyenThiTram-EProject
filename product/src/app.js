@@ -50,17 +50,9 @@ class App {
   }
 
   async stop() {
-    try {
-      await mongoose.disconnect();
-    } catch (e) {
-      console.log('Error disconnecting mongoose:', e.message || e);
-    }
-    if (this.server && this.server.close) {
-      this.server.close();
-      console.log("Server stopped");
-    } else {
-      console.log("Server was not running");
-    }
+    await mongoose.disconnect();
+    this.server.close();
+    console.log("Server stopped");
   }
   
 }
