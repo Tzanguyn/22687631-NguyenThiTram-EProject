@@ -199,4 +199,3 @@ jobs:
     - name: Cleanup
       if: always()
       run: docker compose -f docker-compose.prod.yml down
-      sửa ci.yml theo như thế này (See <attachments> above for file contents. You may not need to search or read the file again.)
