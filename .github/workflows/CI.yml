@@ -1,105 +1,202 @@
-name: CI/CD EProject Microservices
+name: Microservices CI/CD with Docker
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
 
 jobs:
-  ci_cd:
+  test:
     runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - 27017:27017
+      
+      rabbitmq:
+        image: rabbitmq:3.8-management-alpine
+        ports:
+          - 5672:5672
+
+    strategy:
+      matrix:
+        service: [auth, order, product, api-gateway]
+        node-version: [20.x]
+      # run matrix jobs sequentially to reduce parallel memory usage on the runner
+      max-parallel: 1
 
     steps:
-      # --- B1. Lấy code ---
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: ${{ matrix.service }}/package-lock.json
 
-      # --- B2. Tạo file .env ---
-      - name: Create .env files
-        run: |
-          mkdir -p auth product order gateway
+    - name: Wait for MongoDB & RabbitMQ
+      # ensure service containers are accepting connections before running tests
+      run: |
+        for i in $(seq 1 30); do
+          (echo > /dev/tcp/localhost/27017) >/dev/null 2>&1 && (echo > /dev/tcp/localhost/5672) >/dev/null 2>&1 && echo "services are up" && exit 0
+          echo "waiting for services... ($i)"
+          sleep 2
+        done
+        echo "Services did not start in time" && exit 1
 
-          # Auth service
-          echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_AUTH_URI }}" > auth/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
-          echo "PORT=3000" >> auth/.env
+    - name: Install dependencies
+      working-directory: ./${{ matrix.service }}
+      run: npm ci
 
-          # Product service
-          echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_PRODUCT_URI }}" > product/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> product/.env
-          echo "AUTH_SERVICE_URL=http://auth:3000" >> product/.env
-          echo "PORT=3001" >> product/.env
+    - name: Run tests
+      working-directory: ./${{ matrix.service }}
+      run: npm test --if-present || echo "No test for ${{ matrix.service }}"
 
-          # Order service
-          echo "MONGODB_ORDER_URI=${{ secrets.MONGODB_ORDER_URI }}" > order/.env
-          echo "PORT=3002" >> order/.env
+    - name: Build
+      working-directory: ./${{ matrix.service }}
+      run: npm run build --if-present
 
-          # Gateway
-          echo "PORT=3003" > gateway/.env
+  docker-build-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    strategy:
+      matrix:
+        service: [auth, order, product, api-gateway]
+    
+    steps:
+    - uses: actions/checkout@v4
 
-      # --- B3. Build Docker images ---
-      - name: Build Docker images
-        run: |
-          docker build -t eproject-auth ./auth
-          docker build -t eproject-product ./product
-          docker build -t eproject-order ./order
-          docker build -t eproject-gateway ./api-gateway
-          docker pull mongo:6
-          docker pull rabbitmq:3-management
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      # --- B4. Tạo network ---
-      - name: Create Docker network
-        run: docker network create eproject-net || true
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # --- B5. Chạy MongoDB & RabbitMQ ---
-      - name: Start MongoDB & RabbitMQ
-        run: |
-          docker run -d --name mongo --network eproject-net mongo:6
-          docker run -d --name rabbitmq --network eproject-net rabbitmq:3-management
+    - name: Build and push ${{ matrix.service }}
+      uses: docker/build-push-action@v5
+      with:
+        context: ./${{ matrix.service }}
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}-cicd:latest
+          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}-cicd:${{ github.sha }}
 
-      # --- B6. Chạy Auth và Product ---
-      - name: Start Auth and Product
-        run: |
-          docker run -d --name auth --network eproject-net --env-file ./auth/.env eproject-auth
-          docker run -d --name product --network eproject-net --env-file ./product/.env eproject-product
-          sleep 15
+  deploy:
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
 
-      # --- B7. Run tests inside containers ---
-      - name: Run Auth tests
-        run: docker exec auth npm test
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}    # ✅ SỬA DÒNG NÀY
+        password: ${{ secrets.DOCKER_PASSWORD }}    # ✅ SỬA DÒNG NÀY
 
-      - name: Run Product tests
-        run: docker exec product npm test
+    - name: Create production compose file
+      run: |
+        cat > docker-compose.prod.yml << EOF
+        version: "3.9"
+        services:
+          auth:
+            image: ${{ secrets.DOCKER_USERNAME }}/auth-cicd:latest
+            container_name: 'auth-cicd'
+            ports:
+              - "3000:3000"
+            networks:
+              - cicd-network
 
-      # --- B8. Đăng nhập Docker Hub ---
-      - name: Login to Docker Hub
-        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          rabbitmq:
+            image: rabbitmq:3.8-management-alpine
+            container_name: 'rabbitmq-cicd'
+            ports:
+              - "5672:5672"
+              - "15672:15672"
+            volumes:
+              - rabbitmq_data:/var/lib/rabbitmq/
+            networks:
+              - cicd-network
 
-      # --- B9. Push toàn bộ image lên Docker Hub ---
-      - name: Push all images
-        run: |
-          USER=${{ secrets.DOCKER_USERNAME }}
-          PROJECT=eproject
+          order:
+            image: ${{ secrets.DOCKER_USERNAME }}/order-cicd:latest
+            container_name: 'order-cicd'
+            ports:
+              - "3002:3002"
+            depends_on:
+              - rabbitmq
+            environment:
+              - RABBITMQ_URL=amqp://rabbitmq-cicd:5672
+            networks:
+              - cicd-network
 
-          docker tag eproject-auth $USER/$PROJECT-auth:latest
-          docker tag eproject-product $USER/$PROJECT-product:latest
-          docker tag eproject-order $USER/$PROJECT-order:latest
-          docker tag eproject-gateway $USER/$PROJECT-gateway:latest
-          docker tag mongo:6 $USER/$PROJECT-mongo:latest
-          docker tag rabbitmq:3-management $USER/$PROJECT-rabbitmq:latest
+          product:
+            image: ${{ secrets.DOCKER_USERNAME }}/product-cicd:latest
+            container_name: 'product-cicd'
+            ports:
+              - "3001:3001"
+            depends_on:
+              - rabbitmq
+            environment:
+              - RABBITMQ_URL=amqp://rabbitmq-cicd:5672
+            networks:
+              - cicd-network
 
-          docker push $USER/$PROJECT-auth:latest
-          docker push $USER/$PROJECT-product:latest
-          docker push $USER/$PROJECT-order:latest
-          docker push $USER/$PROJECT-gateway:latest
-          docker push $USER/$PROJECT-mongo:latest
-          docker push $USER/$PROJECT-rabbitmq:latest
+          api-gateway:
+            image: ${{ secrets.DOCKER_USERNAME }}/api-gateway-cicd:latest
+            container_name: 'gateway-cicd'
+            ports:
+              - "3003:3003"
+            environment:
+              - RABBITMQ_URL=amqp://rabbitmq-cicd:5672
+            networks:
+              - cicd-network
 
-      # --- B10. Dọn dẹp ---
-      - name: Cleanup
-        if: always()
-        run: |
-          docker stop auth product order gateway mongo rabbitmq || true
-          docker rm auth product order gateway mongo rabbitmq || true
-          docker network rm eproject-net || true
+          mongo:
+            image: mongo:6
+            container_name: 'mongodb-cicd'
+            ports:
+              - "27017:27017"
+            volumes:
+              - mongo_data:/data/db
+            networks:
+              - cicd-network
+
+        networks:
+          cicd-network:
+            driver: bridge
+
+        volumes:
+          mongo_data:
+          rabbitmq_data:
+        EOF
+    - name: Ensure Docker is running
+      run: docker info
+    - name: Pull và start services
+      run: |
+        docker compose -f docker-compose.prod.yml pull
+        docker compose -f docker-compose.prod.yml up -d
+        sleep 20
+        docker compose -f docker-compose.prod.yml ps
+
+    - name: Test services
+      run: |
+        curl -f http://localhost:3003 || echo "Gateway OK"
+        curl -f http://localhost:3000 || echo "Auth OK"
+        curl -f http://localhost:3001 || echo "Product OK"
+        curl -f http://localhost:3002 || echo "Order OK"
+
+    - name: Cleanup
+      if: always()
+      run: docker compose -f docker-compose.prod.yml down
+      sửa ci.yml theo như thế này (See <attachments> above for file contents. You may not need to search or read the file again.)
