@@ -50,7 +50,13 @@ jobs:
 
     - name: Install dependencies
       working-directory: ./${{ matrix.service }}
-      run: npm ci
+      run: |
+        # prefer clean install if lockfile present, otherwise fall back to npm install
+        if [ -f package-lock.json ]; then
+          npm ci
+        else
+          npm install
+        fi
 
     - name: Run tests
       working-directory: ./${{ matrix.service }}
