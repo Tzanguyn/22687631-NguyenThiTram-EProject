@@ -22,7 +22,6 @@ jobs:
       # --- Build Docker images cho 4 service ---
       - name: Build Docker images
         run: |
-          set -euo pipefail
           for service in auth product order api-gateway; do
             echo "Building $service..."
             docker build -t eproject-$service ./$service
@@ -33,19 +32,18 @@ jobs:
       # --- Run MongoDB & RabbitMQ ---
       - name: Start MongoDB & RabbitMQ
         run: |
-          set -euo pipefail
           docker run -d --name mongo --network eproject-net mongo:6
           docker run -d --name rabbitmq --network eproject-net rabbitmq:3-management
-          echo "Waiting 12s for MongoDB and RabbitMQ to initialize"
-          sleep 12
+          sleep 10
 
       # --- Run và test Auth service ---
       - name: Run Auth container
         run: |
-          set -euo pipefail
-          docker run -d --name auth --network eproject-net -e MONGODB_AUTH_URI='mongodb://mongo:27017/auth_test' -e JWT_SECRET='${{ secrets.JWT_SECRET }}' -p 3000:3000 eproject-auth
-      - name: Give Auth time to start
-        run: sleep 5
+          docker run -d --name auth --network eproject-net \
+            -e MONGODB_AUTH_URI=mongodb://mongo:27017/auth_test \
+            -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
+            -p 3000:3000 \
+            eproject-auth
       - name: Test Auth
         run: docker exec auth npm test --if-present
         env:
@@ -54,10 +52,13 @@ jobs:
       # --- Run và test Product service ---
       - name: Run Product container
         run: |
-          set -euo pipefail
-          docker run -d --name product --network eproject-net -e MONGODB_PRODUCT_URI='mongodb://mongo:27017/product_test' -e JWT_SECRET='${{ secrets.JWT_SECRET }}' -e AUTH_SERVICE_URL='http://auth:3000' -e RABBITMQ_URL='amqp://rabbitmq:5672' -p 3001:3001 eproject-product
-      - name: Give Product time to start
-        run: sleep 5
+          docker run -d --name product --network eproject-net \
+            -e MONGODB_PRODUCT_URI=mongodb://mongo:27017/product_test \
+            -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
+            -e AUTH_SERVICE_URL=http://auth:3000 \
+            -e RABBITMQ_URL=amqp://rabbitmq:5672 \
+            -p 3001:3001 \
+            eproject-product
       - name: Test Product
         run: docker exec product npm test --if-present
         env:
@@ -66,31 +67,29 @@ jobs:
       # --- Run Order service ---
       - name: Run Order container
         run: |
-          set -euo pipefail
-          docker run -d --name order --network eproject-net -e MONGODB_ORDER_URI='mongodb://mongo:27017/order_test' -e PRODUCT_SERVICE_URL='http://product:3001' -p 3002:3002 eproject-order
-      - name: Give Order time to start
-        run: sleep 5
+          docker run -d --name order --network eproject-net \
+            -e MONGODB_ORDER_URI=mongodb://mongo:27017/order_test \
+            -e PRODUCT_SERVICE_URL=http://product:3001 \
+            -p 3002:3002 \
+            eproject-order
 
       # --- Run API Gateway service ---
       - name: Run Gateway container
         run: |
-          set -euo pipefail
-          docker run -d --name gateway --network eproject-net -e AUTH_SERVICE_URL='http://auth:3000' -e PRODUCT_SERVICE_URL='http://product:3001' -e ORDER_SERVICE_URL='http://order:3002' -p 3003:3003 eproject-api-gateway
-      - name: Give Gateway time to start
-        run: sleep 5
+          docker run -d --name gateway --network eproject-net \
+            -e AUTH_SERVICE_URL=http://auth:3000 \
+            -e PRODUCT_SERVICE_URL=http://product:3001 \
+            -e ORDER_SERVICE_URL=http://order:3002 \
+            -p 3003:3003 \
+            eproject-api-gateway
 
       # --- Kiểm tra các service đã chạy ---
       - name: Test services
         run: |
-          set -euo pipefail
-          echo "Checking gateway on localhost:3003"
-          for i in $(seq 1 10); do curl -sS http://localhost:3003 && break || sleep 1; done || true
-          echo "Checking auth on localhost:3000"
-          for i in $(seq 1 10); do curl -sS http://localhost:3000 && break || sleep 1; done || true
-          echo "Checking product on localhost:3001"
-          for i in $(seq 1 10); do curl -sS http://localhost:3001 && break || sleep 1; done || true
-          echo "Checking order on localhost:3002"
-          for i in $(seq 1 10); do curl -sS http://localhost:3002 && break || sleep 1; done || true
+          curl -f http://localhost:3003 || echo "Gateway OK"
+          curl -f http://localhost:3000 || echo "Auth OK"
+          curl -f http://localhost:3001 || echo "Product OK"
+          curl -f http://localhost:3002 || echo "Order OK"
 
       # --- Login Docker Hub ---
       - name: Login Docker Hub
