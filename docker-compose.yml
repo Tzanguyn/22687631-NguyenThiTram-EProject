@@ -13,8 +13,8 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: haohaao78
-      RABBITMQ_DEFAULT_PASS: Shatou5114
+      RABBITMQ_DEFAULT_USER: admin123
+      RABBITMQ_DEFAULT_PASS: 123456
     ports:
       - "5672:5672"
       - "15672:15672"
