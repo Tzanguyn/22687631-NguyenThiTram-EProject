@@ -1,0 +1,84 @@
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: haohaao78
+      RABBITMQ_DEFAULT_PASS: Shatou5114
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  auth:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    container_name: auth
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+      - rabbitmq
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=haohaao78
+      - RABBITMQ_PASS=Shatou5114
+
+  order:
+    build:
+      context: ./order
+      dockerfile: Dockerfile
+    container_name: order
+    ports:
+      - "3002:3002"
+    depends_on:
+      - mongo
+      - rabbitmq
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=haohaao78
+      - RABBITMQ_PASS=Shatou5114
+
+  product:
+    build:
+      context: ./product
+      dockerfile: Dockerfile
+    container_name: product
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mongo
+      - rabbitmq
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=haohaao78
+      - RABBITMQ_PASS=Shatou5114
+
+  gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: gateway
+    ports:
+      - "3003:3003"
+    depends_on:
+      - auth
+      - product
+      - order
+
+volumes:
+  mongo-data:
+  rabbitmq-data:
